@@ -889,6 +889,8 @@ int grid::StarParticleHandler(HierarchyEntry* SubgridPointer, int level,
           tg->ParticleType[i] = NormalStarType;
     }
     if (STARMAKE_METHOD(MECHANICAL)) {
+       NumberOfNewParticlesSoFar = NumberOfNewParticles;
+       
   FORTRAN_NAME(star_maker_mechanical)(
        GridDimension, GridDimension+1, GridDimension+2,
        BaryonField[DensNum], dmfield, temperature, BaryonField[Vel1Num],
@@ -908,6 +910,8 @@ int grid::StarParticleHandler(HierarchyEntry* SubgridPointer, int level,
        tg->ParticleMass, tg->ParticleAttribute[1], tg->ParticleAttribute[0],
        tg->ParticleAttribute[2], &StarMakerMaximumFormationMass
        ); 
+      for (i = NumberOfNewParticlesSoFar; i < NumberOfNewParticles; i++)
+          tg->ParticleType[i] = NormalStarType;
     }
     if (STARMAKE_METHOD(UNIGRID_STAR)) {
 
