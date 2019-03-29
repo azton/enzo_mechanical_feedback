@@ -77,7 +77,7 @@ c
         INTG_PREC  i, j, k, ii
         R_PREC   div, tdyn, grad_rho, tau_cell, phi_cell, hcell
         R_PREC   psi_cell, f_shielded,dtot, zcell, dcell, max_mass
-        R_PREC   m_units
+        R_PREC   m_units, t_ff
         real*8 msolar, pi, G, sndspdC
 c
         ii = np
@@ -135,15 +135,12 @@ c         4: Is the flow converging (negative divergence)?
               if (div .ge. 0._RKIND) goto 20
 c         If we got to this point, its time to make a star
               ii = ii + 1_IKIND
-c              write(6,*) 'n_created: ', ii-np
-c              write(6,*) 'n_max: ',nmax
-c              write(6,*) 'Max form mass: ',max_form_mass
-              max_mass = max_form_mass / m_units
-c              write(6,*) 'max code mass: ',max_mass
-c              write(6,*) 'cell mass code: ',d(i,j,k)
-c              write(6,*) 'cell mass phys: ',d(i,j,k)*m_units
-              mp(ii) = min(max_mass, 0.1_RKIND * d(i,j,k))
-c              write(6,*) 'formed mass phys: ', mp(ii) * m_units
+              max_mass = max_form_mass
+              t_ff = sqrt(3._RKIND*pi / (32._RKIND * G * d(i,j,k)*dunits))/t1
+              if (f_shielded*d(i,j,k)*m_units/t_ff .lt. 0.1*max_mass) 
+     &          goto 20
+              mp(ii) = min(max_mass, 
+     &                  f_shielded*d(i,j,k)*m_units/t_ff)/m_units
               if (mp(ii) * m_units > 1e4_RKIND) then
                 write(6,*) 'Cell mass: ', 
      &                  d(i,j,k) * m_units
@@ -151,12 +148,9 @@ c              write(6,*) 'formed mass phys: ', mp(ii) * m_units
      &                    mp(ii) * m_units
               endif
               tcp(ii) = t
-c              write(6,*) 'created star MP=',mp(ii)/m_units,
-c     &              'tcp: ',tcp(ii)
               dtot = ( d(i,j,k) + dm(i,j,k) )*dunits
               tdyn  = sqrt(3._RKIND*pi/32._RKIND/G/dtot)/t1
-c     For now, using tdp as counter for number of SN events
-              tdp(ii) = max(tdyn, mintdyn*3.15e7_RKIND/t1)
+              tdp(ii) = tdyn
               xp(ii) = xstart+(REAL(i,RKIND)-0.5_RKIND)*dx
               yp(ii) = ystart+(REAL(j,RKIND)-0.5_RKIND)*dx
               zp(ii) = zstart+(REAL(k,RKIND)-0.5_RKIND)*dx
@@ -178,16 +172,18 @@ c
 c              Set the particle metal fraction
 c
               if (imetal .eq. 1) then
-  !                 write(*,'("Setting metal fraction")')
                     metalf(ii) = metal(i,j,k)    ! in here metal is a fraction
                 else
-  !                 write(*,'("Zero metal fraction")')
                     metalf(ii) = 0._RKIND
-              endif    
+              endif
+c    
 c       Remove mass from grid 
+c
               d(i,j,k) = d(i,j,k) - mp(ii)
-c              write(6,*) 'star created mass: ', 
-c     &        mp(ii)*dunits*(x1*dx)**3*msolar
+#ifdef FORTRAN_DEBUG
+              write(6,*) 'star created mass: ', 
+     &        mp(ii)*dunits*(x1*dx)**3*msolar
+#endif
               if (ii .ge. nmax) goto 30                       
  20     continue              
             enddo !loop i
@@ -213,19 +209,15 @@ c    star_maker3mom, i.e., Cen & Ostriker stochastic formation but with stars gi
 c    the bulk velocity of progenitor gas.  
 c
 c
-c    Supernova are handled discretely, drawing the probability of a SN II, Ia.
-c    Stars stay active indefinitely, feeding back winds based on the age of the
+c    If SingleSN = 1, Supernova are handled discretely, drawing the probability of a SN II, Ia.
+c    Stars stay active indefinitely (until a lower mass limit to prevent
+c    negative mass stars), feeding back winds based on the age of the
 c    particle:
 c    young particles have strong & fast winds from OB stars, old particles
 c    have slow winds from AGB.
 c
-c    This routine currently uses the fact that PPM uses cell-centered qtys
-c    to treat neighbor cells as points (ala reverse SPH), so may have very
-c    unintended consequences with Zeus hydro.
-c
-c    Particle creation is handled via method 3 or 14: cen & ostriker +
-c    stochastic star formation,
-
+c     This was imported from a very early version of enzo, and is missing some feed-
+c     back types: SNIa, cosmic rays, etc.  
 c=======================================================================
 c/////////////////////  SUBROUTINE STAR_FEEDBACK \\\\\\\\\\\\\\\\\\\\\\\
 c
@@ -373,14 +365,9 @@ c
       e_units = dunits * x1**5*dx**3  /t1**2 ! ergs
       p_units = sqrt(m_units*msolar*e_units)/1e5/msolar ! Msun*km/s
       max_mass = max_star_mass / m_units
-c      write(6,*) 'max star mass', max_mass/m_units
-c      write(6,*) 'x units: ', x1
-c      write(6,*) 'time units: ',t1
-c      write(6,*) 'rho units: ', dunits
-c      write(6,*) 'mass_units: ', m_units
-c      write(6,*) 'energy_units: ', e_units
-c      write(6,*) 'momenta_units: ', p_units
-c      write(6,*) 'alt p_units: ', dunits * x1**4/t1
+c
+c   Loop over particles
+c
       do n=1_IKIND, npart
         if (tcp(n) .gt. 0._RKIND .and. 
      &          mp(n) .gt. 0.01_RKIND*max_mass .and.
@@ -1007,7 +994,8 @@ c
       INTG_PREC i, j, k, i1, j1, k1, n_sn
       R_PREC    delta_mass, delta_pu, delta_pv, delta_pw, delta_therm,
      &          dratio, tot_mass, temp, scalar_weight, p_t,p_rat,
-     &          m_deposited, e_deposited, fz,m_units, d_units, m_cell
+     &          m_deposited, e_deposited, fz,m_units, d_units, m_cell,
+     &          dmean, nmean, zmean
       R_PREC  r_cool(3,3,3)
       R_PREC  delta_p(3), p_deposited(3)
       R_PREC  weightsFinal(3,3,3,3), nbor(3,3,3,3), xba(3,3,3,3)
@@ -1036,11 +1024,12 @@ c
      &            *1e5_RKIND / p_units 
       p_rat = p_t/p_ej      
       m_cell = d(ic, jc, kc)
+      dmean = 0._RKIND
       do k = -1_IKIND, 1_IKIND
         do j = -1_IKIND, 1_IKIND
           do i = -1_IKIND, 1_IKIND
                 ! P_t in hopkins is in units Msun*km/s.
-
+            dmean = dmean + d(i+2, j+2, k+2)/REAL(i+j+k+6,RKIND) ! rolling mean of density
             r_cool (i+2, j+2, k+2) = 28.4*3.018e18*nb**(-3.0/7.0)
      &                * (e_sn/1e51*e_units)**(2.0/7.0)*fz
      &                /xunits
@@ -1055,7 +1044,11 @@ c
           enddo
         enddo
       enddo
-
+      nmean = dmean*d_units / 1.67262171e-24_RKIND
+      p_t = (4.8 *1.0/nmean**(1._RKIND/7._RKIND)
+     &            *  (e_sn*e_units/1e51_RKIND)**(13._RKIND/14._RKIND)
+     &            * fz)
+     &            *1e5_RKIND / p_units
 c
       tempx = 0._RKIND
       do k = -1_IKIND, +1_IKIND
@@ -1147,6 +1140,12 @@ c
 #ifdef FORTRAN_DEBUG
                       write(6,*) 'Dtherm added: ',delta_therm*e_units
 #endif          
+                      if (delta_therm*e_units .gt. 1e52_RKIND .or. 
+     &                  temp*e_units .gt. 1.0e52_RKIND .or.
+     &                  delta_mass * m_units .gt. 10.5_RKIND) then
+                        write(6,*) "Dtherm explosion: \ndt: ",delta_therm*e_units,
+     &                    '\nke: ',temp,'\nmass dep: ',delta_mass*m_units
+                      endif
           ! Add kinetic and thermal energy to total energy
 c#ifdef FORTRAN_DEBUG
 c            write(6,*) 'e_cell, KE, dtherm',te(ic+i1 ,jc+j1 ,kc+k1),
@@ -1183,16 +1182,7 @@ c
                      enddo
                   enddo
                enddo
-c#ifdef FORTRAN_DEBUG
-c               write(6,*) 'D_pu = w dp xba(1): ', weightsFinal(i,j,k,1),
-c     &               delta_p(1)*p_units
-c               write(6,*) 'delta_p(1)=sum(d_pu): ',
-c     &              delta_p(1)*p_units, i,j,k
-c               write(6,*) 'added: ', tempx*p_units
-c               write(6,*) 'total added, x,y,z: ', 
-c     &                p_deposited(1)*p_units, p_deposited(2)*p_units,
-c     &                p_deposited(3)*p_units
-c#endif
+c
 c     End loop over "cells" in particle-frame
 c
             enddo
