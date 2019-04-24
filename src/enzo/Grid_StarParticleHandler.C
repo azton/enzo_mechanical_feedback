@@ -511,7 +511,7 @@ extern "C" void FORTRAN_NAME(copy3d)(float *source, float *dest,
                                    int *sstart1, int *sstart2, int *sstart3,
                                    int *dstart1, int *dstart2, int *dststart3);
 extern "C" void FORTRAN_NAME(star_feedback_mechanical)(int *nx, int *ny, int *nz, 
-                           float*d, float *dm, float *te, 
+                           float *mu_field, float *d, float *dm, float *te, 
                            float*ge, float *u, float *v, 
                            float *w, float *metal, float *zfield1, 
                            float *zfield2, int *idual, int *imetal, 
@@ -1658,9 +1658,42 @@ int grid::StarParticleHandler(HierarchyEntry* SubgridPointer, int level,
  
   } // end: if UNIGRID_STAR
   if (STARFEED_METHOD(MECHANICAL)) {
+         // Compute mu across grid
+    float *mu_field = new float[size];
+    for (k = GridStartIndex[2]; k <= GridEndIndex[2]; k++) {
+      for (j = GridStartIndex[1]; j <= GridEndIndex[1]; j++) {
+	for (i = GridStartIndex[0]; i <= GridEndIndex[0]; i++) {
+	  
+	  index = i + j*GridDimension[0] + k*GridDimension[0]*GridDimension[1];
+	  mu_field[index] = 0.0;
+	  // calculate mu
+
+	  if (MultiSpecies == 0) {
+	    mu_field[index] = Mu;
+	  } else {
+
+	    if (IdentifySpeciesFields(DeNum, HINum, HIINum, HeINum, HeIINum, HeIIINum,
+				      HMNum, H2INum, H2IINum, DINum, DIINum, HDINum) == FAIL) {
+	      ENZO_FAIL("Error in grid->IdentifySpeciesFields.\n");
+	    }
+
+	    mu_field[index] = BaryonField[DeNum][index] + BaryonField[HINum][index] + BaryonField[HIINum][index] +
+	      (BaryonField[HeINum][index] + BaryonField[HeIINum][index] + BaryonField[HeIIINum][index])/4.0;
+	    if (MultiSpecies > 1) {
+	      mu_field[index] += BaryonField[HMNum][index] + (BaryonField[H2INum][index] + BaryonField[H2IINum][index])/2.0;
+	    }
+	    if (MultiSpecies > 2) {
+	      mu_field[index] += (BaryonField[DINum][index] + BaryonField[DIINum][index])/2.0 + (BaryonField[HDINum][index]/3.0);
+	    }
+	    
+	  }
+	}
+      }
+    }
+
      FORTRAN_NAME(star_feedback_mechanical)(
         GridDimension, GridDimension+1, GridDimension+2,
-         BaryonField[DensNum], dmfield,BaryonField[TENum], 
+         mu_field, BaryonField[DensNum], dmfield,BaryonField[TENum], 
          BaryonField[GENum], BaryonField[Vel1Num], BaryonField[Vel2Num], 
          BaryonField[Vel3Num], BaryonField[MetalNum], BaryonField[MetalNum+1],
          BaryonField[MetalNum+2], &DualEnergyFormalism, &MetallicityField, 
