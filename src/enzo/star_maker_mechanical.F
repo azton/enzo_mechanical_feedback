@@ -827,7 +827,7 @@ c
               n_sn_ia = 0._RKIND
               if (one_event .gt. 0._RKIND) then
                 if (tdp(n) .gt. one_event) goto 110
-                if (tdp(n) .le. one_event 
+                if (tdp(n) .lt. one_event 
      &                .and. t .ge. tdp(n)*0.05) then
                   n_sn_ii = 1._RKIND
                   tdp(n) = tdp(n) + 1._RKIND
@@ -900,6 +900,7 @@ c
      &                    /m_units
             p_ej = sqrt(2._RKIND * e_sn
      &              * m_eject)
+            write(6,*) "SN energy: ",p_ej**2/(2*m_eject) * e_units
 #ifdef FORTRAN_DEBUG
             write(0,*) 'SN ejected mass: ',m_eject*m_units
             write(0,*) 'SN ejected metal: ', metal_ejecta * m_units
@@ -1105,10 +1106,6 @@ c
           fz = (zcell/0.02_RKIND)**(-0.14_RKIND)
       endif
       nb = d(ic,jc,kc)*d_units/1.67262171e-24_RKIND
-      p_t = (4.8*10**5_RKIND *1._RKIND/nb**(1._RKIND/7._RKIND)
-     &            *  (e_sn*e_units/1e51_RKIND)**(13._RKIND/14._RKIND)
-     &            * fz)
-     &            *1e5_RKIND / p_units 
       p_rat = p_t/p_ej      
       m_cell = d(ic, jc, kc)
       dmean = 0._RKIND
@@ -1136,10 +1133,10 @@ c
         enddo
       enddo
       nmean = dmean*d_units / 1.67262171e-24_RKIND / mumean
-      p_t = (4.8e5_RKIND*1.0/nmean**(1._RKIND/7._RKIND)
+      p_t = (4.8*10**5_RKIND*1.0/nmean**(1._RKIND/7._RKIND)
      &            *  (e_sn*e_units/1e51_RKIND)**(13._RKIND/14._RKIND)
      &            * fz)
-     &            *1e5_RKIND / p_units
+     &            / p_units
 c
       tempx = 0._RKIND
       do k = -1_IKIND, +1_IKIND
@@ -1161,7 +1158,8 @@ c          write(6,*) 'delta_e: ',delta_e*e_units
                   temp = sqrt(1._RKIND+m_cell/delta_m)
                 endif
 c#ifdef FORTRAN_DEBUG
-c                write(6,*) 'temp, p_t/p_ej ',temp, p_t/p_ej
+                write(6,*) 'p_t, p_ej', p_t, p_ej
+                write(6,*) 'temp, p_t/p_ej ',temp, p_t/p_ej
 c#endif
                 delta_p(a) = p_ej*min(temp, p_rat)
      &                        *weightsFinal(i+2,j+2,k+2,a)
@@ -1246,7 +1244,7 @@ c
      &                  (temp*e_units) .gt. 1.0e52_RKIND .or.
      &                  (delta_mass * m_units) .gt. 10.5_RKIND) then
                         write(6,*) "Dtherm explosion: dt: ",delta_therm*e_units,
-     &                    'ke: ',temp,'mass dep: ',delta_mass*m_units
+     &                    'ke: ',temp*e_units,'mass dep: ',delta_mass*m_units
                       endif
           ! Add kinetic and thermal energy to total energy
 c#ifdef FORTRAN_DEBUG
