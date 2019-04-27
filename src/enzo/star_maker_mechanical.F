@@ -449,7 +449,7 @@ c
       R_PREC tempx, tempy, tempz
 c    external random
       real random
-      call random_seed()
+c      call random_seed()
 c
 c-----------------------------------------------------------------------
 c
@@ -460,7 +460,7 @@ c
      &    ' works with PPM hydro solver! method= ',imethod
         goto 10
       endif
-      one_event = 0._RKIND ! flag for testing: =1 implies only one sn at first step
+      one_event = 1._RKIND ! flag for testing: =1 implies only one sn at first step
       msolar = SolarMass ! grams per m_sol
       pi = 3.14159265358979323846_RKIND
       g = GravConst
@@ -821,7 +821,7 @@ c              rates are per solar mass per Myr
 c
 c    4/?  Draw from random numbers to see if SN happen or not this timestep
 c
-              random = RAND()
+              call random_number(random)
               write(6,*) 'random =',random
               n_sn_ii = 0._RKIND
               n_sn_ia = 0._RKIND
@@ -858,7 +858,7 @@ c
                n_sn_ii = 0._RKIND
             endif
             if (age .ge. 37.53_RKIND) then
-              random = RAND()
+              call random_number(random)
               if (random .le. mstar * R_ia * dt * t1/3.14e13_RKIND) then
                 n_sn_ia = 1._RKIND !anint(mp(n) * R_ia * dt * t1/3.14e13_RKIND)
               else

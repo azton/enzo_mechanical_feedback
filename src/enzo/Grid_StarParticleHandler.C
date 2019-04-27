@@ -1709,7 +1709,7 @@ int grid::StarParticleHandler(HierarchyEntry* SubgridPointer, int level,
          ParticleAttribute[0],ParticleAttribute[2], ParticleType,  
          &StellarWinds, &SingleSN, &StarMakerMaximumMass
      );
-
+   delete [] mu_field;
   }
   if (STARFEED_METHOD(UNIGRID_STAR)) {
 
