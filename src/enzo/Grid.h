@@ -360,7 +360,7 @@ public:
 /* Compute the timestep constraint for this grid
     (for steps #3 and #4) */
 
-   float ComputeTimeStep();
+   float ComputeTimeStep(int level);
 
 /* Set the timestep in this grid to the timestep in the argument
     (for step #3) */

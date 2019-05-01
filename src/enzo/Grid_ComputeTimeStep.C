@@ -33,6 +33,7 @@
 #include "hydro_rk/EOS.h"
 #include "hydro_rk/tools.h"
 #include "phys_constants.h"
+#include "StarParticleData.h"
  
 /* function prototypes */
  
@@ -60,7 +61,7 @@ FORTRAN_NAME(mhd_dt)(float *bxc, float *byc, float *bzc,
                      int *j1, int *j2,
                      int *k1, int *k2, float* eng);
  
-float grid::ComputeTimeStep()
+float grid::ComputeTimeStep(int level)
 {
  
   /* Return if this doesn't concern us. */
@@ -454,9 +455,6 @@ float grid::ComputeTimeStep()
   dt = min(dt, dtCR);
   dt = min(dt, dtGasDrag);
   dt = min(dt, dtCooling);
-
-#ifdef TRANSFER
-
   float TemperatureUnits, DensityUnits, LengthUnits, 
     VelocityUnits, TimeUnits, aUnits = 1;
 
@@ -464,6 +462,18 @@ float grid::ComputeTimeStep()
 	       &TimeUnits, &VelocityUnits, Time) == FAIL) {
     ENZO_FAIL("Error in GetUnits.");
   }
+  float dtStar = huge_number;
+  if (STARMAKE_METHOD(MECHANICAL)){
+    if (level == MaximumRefinementLevel){
+      float pSNmax = 0.0005408 * StarMakerMaximumFormationMass * dt * TimeUnits/3.15e13;
+      if (pSNmax > 1.0) 
+        dtStar = dt * 1.0/pSNmax;
+    }
+  }
+  dt = min(dt, dtStar);
+#ifdef TRANSFER
+
+
 
   /* 8) If using radiation pressure, calculate minimum dt */
 
