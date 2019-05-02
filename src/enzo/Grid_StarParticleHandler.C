@@ -526,7 +526,7 @@ extern "C" void FORTRAN_NAME(star_feedback_mechanical)(int *nx, int *ny, int *nz
                            float *wp, float *mp, float *tdp, 
                            float *tcp, float *metalf, int *type, 
                            int *star_winds, int *single_sn,
-                           float *star_max_mass);
+                           float *star_max_mass, float* odthresh);
 // declaring Geoffrey's Emissivity field prototype
 #ifdef EMISSIVITY
   int CalcEmiss(int *nx, int *ny, int *nz,
@@ -1711,7 +1711,7 @@ int grid::StarParticleHandler(HierarchyEntry* SubgridPointer, int level,
          ParticleVelocity[1],ParticleVelocity[2],ParticleMass, 
          ParticleAttribute[1], ParticleAttribute[0],ParticleAttribute[2], 
          ParticleType,  &StellarWinds, &SingleSN, 
-         &StarMakerMaximumMass
+         &StarMakerMaximumMass, &StarMakerOverDensityThreshold
      );
    delete [] mu_field;
   }
