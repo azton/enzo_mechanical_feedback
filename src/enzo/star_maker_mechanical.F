@@ -93,13 +93,14 @@ c
       R_PREC   pi, G, sndspdC
       R_PREC   isosndsp2, starmass, starfraction, bmass, jeanmass
       R_PREC   max_mass, grad_rho, tau, phi, psi, f_s, t_ff, m_units
-      R_PREC msolar
+      R_PREC msolar, min_mass
       parameter (pi=pi_val, G=GravConst,
      &           sndspdC=1.3095e8_RKIND,
      &           msolar=SolarMass)
 c
       ii = np
       max_mass = max_form_mass * msolar /dunits/dx**3/x1**3
+      min_mass = 1e3_RKIND * msolar / dunits/(dx*x1)**3_RKIND
 !     print*,'star_maker3: imetal is:',imetal
 
 c
@@ -111,7 +112,6 @@ c    is the density greater than a critical density ?
 c    is the flow convergent ?
 c    is the cooling time less than a dynamical time ?
 c    is the gas mass greater than the Jeans mass?
-c
       do k=1+ibuff,nz-ibuff
          do j=1+ibuff,ny-ibuff
             do i=1+ibuff,nx-ibuff
@@ -208,14 +208,14 @@ c
      &               * (phi)**2_RKIND))
               f_s = 1._RKIND - 3._RKIND/(1._RKIND+ 4._RKIND*psi)
                if (f_s .le. 0._RKIND) goto 10
-               write(6,*) "shielded fraction: ", f_s
+c               write(6,*) "shielded fraction: ", f_s
                if (f_s .gt. 1._RKIND) f_s = 1._RKIND
                t_ff = sqrt(3._RKIND*dble(pi / (32._RKIND * G * d(i,j,k)*dunits)))/t1
 c
 c              Create a star particle
 c
                ii = ii + 1
-               mp(ii)  =  max(0.001_RKIND * d(i,j,k),
+               mp(ii)  =  max(min_mass,
      &                    min(f_s * d(i,j,k)/t_ff, max_mass))
                if (mp(ii) .gt. d(i,j,k)) then
                 write(6,*) "Fatal Error: Mass of star > Mass of cell"
