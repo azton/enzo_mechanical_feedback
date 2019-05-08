@@ -910,7 +910,8 @@ int grid::StarParticleHandler(HierarchyEntry* SubgridPointer, int level,
        ); 
       for (i = NumberOfNewParticlesSoFar; i < NumberOfNewParticles; i++){
           tg->ParticleType[i] = NormalStarType;
-          fprintf(stderr, "Particle created type: %d\n",tg->ParticleType[i]);}
+         //  fprintf(stderr, "Particle created type: %d\n",tg->ParticleType[i]);
+          }
     }
     if (STARMAKE_METHOD(UNIGRID_STAR)) {
 
@@ -1691,7 +1692,12 @@ int grid::StarParticleHandler(HierarchyEntry* SubgridPointer, int level,
     }
    for (int cnt = 0; cnt < NumberOfParticles; cnt ++){
       if ((ParticleType[cnt] > 2.0)){
-         fprintf(stderr, "Particle Type not DM or star: %d\n", ParticleType[cnt]);
+         fprintf(stderr, "Particle Type not DM or star: type = %d\n", ParticleType[cnt]);
+         fprintf(stderr, "particle mass = %lf", ParticleMass[cnt]);
+         fprintf(stderr, "Attr 0 = %lf", ParticleAttribute[0][cnt]);
+         fprintf(stderr, "Attr 1 = %lf", ParticleAttribute[1][cnt]);
+         fprintf(stderr, "Attr 2 = %lf", ParticleAttribute[2][cnt]);
+         fprintf(stderr, "Attr 3 = %lf", ParticleAttribute[3][cnt]);
       }
    }
      FORTRAN_NAME(star_feedback_mechanical)(

@@ -465,7 +465,7 @@ float grid::ComputeTimeStep(int level)
   float dtStar = huge_number;
   if (STARMAKE_METHOD(MECHANICAL)){
     if (level == MaximumRefinementLevel){
-      float pSNmax = 0.0005408 * StarMakerMaximumFormationMass * dt * TimeUnits/3.15e13;
+      float pSNmax = 0.0005408 * StarMakerMaximumFormationMass * dt * TimeUnits/3.15e13*1.25;
       if (pSNmax > 1.0) 
         dtStar = dt * 1.0/pSNmax;
     }
