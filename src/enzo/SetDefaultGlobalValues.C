@@ -594,6 +594,10 @@ int SetDefaultGlobalValues(TopGridData &MetaData)
   SingleSN                         = 1;
   StarMakerMaximumFormationMass    = 1e3;
   StarMakerMaximumMass             = 1e5;
+  StarMakeLevel                    = 0;
+  NEvents                          = 0;
+  DepositUnresolvedEnergyAsThermal = 1;
+  AnalyticSNRShellMass             = 1;
   StarMakerUseJeansMass            = TRUE;
   MultiMetals                      = FALSE;
   NumberOfParticleAttributes       = INT_UNDEFINED;

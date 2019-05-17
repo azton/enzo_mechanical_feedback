@@ -921,6 +921,11 @@ int WriteParameterFile(FILE *fptr, TopGridData &MetaData, char *name = NULL)
   fprintf(fptr, "SingleSN                              = %"ISYM"\n", SingleSN);
   fprintf(fptr, "StarMakerMaximumFormationMass         = %"FSYM"\n", StarMakerMaximumFormationMass);
   fprintf(fptr, "StarMakerMaximumMass                  = %"FSYM"\n", StarMakerMaximumMass);
+  fprintf(fptr, "DepositUnresolvedEnergyAsThermal      = %"ISYM"\n", DepositUnresolvedEnergyAsThermal);
+  fprintf(fptr, "AnalyticSNRShellMass                  = %"ISYM"\n", AnalyticSNRShellMass);
+  fprintf(fptr, "NEvents                               = %"ISYM"\n", NEvents);
+  fprintf(fptr, "StarMakerMinimumRefinementLevel       = %"ISYM"\n", StarMakeLevel);
+
   fprintf(fptr, "StarMakerPlanetaryNebulae             = %"ISYM"\n",
 	  StarMakerPlanetaryNebulae);
   fprintf(fptr, "MultiMetals                           = %"ISYM"\n\n",
