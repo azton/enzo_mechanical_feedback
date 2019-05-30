@@ -8,13 +8,14 @@ c
       subroutine star_maker_mechanical(nx, ny, nz,
      &                      d, dm, temp, u, v, w,
      &                      dt, r, metal, zfield1, zfield2,
-     &                      dx, t, z, procnum, 
+     &                      dx, t, z, procnum,
      &                      dunits, x1, vunits, t1,
-     &                      nmax, xstart, ystart, zstart, ibuff, 
+     &                      nmax, xstart, ystart, zstart, ibuff,
      &                      imetal, imethod, mintdyn,
-     &                      odthresh, level, np, 
+     &                      odthresh, level, np,
      &                      xp, yp, zp, up, vp, wp,
-     &                      mp, tdp, tcp, metalf, max_form_mass)
+     &                      mp, tdp, tcp, metalf, max_form_mass,
+     &                      smLevel)
 
 c
 c  CREATES STAR PARTICLES FOR KINETIC FEEDBACK
@@ -68,7 +69,7 @@ c
 c  Arguments
 c
       INTG_PREC nx, ny, nz, ibuff, nmax, np, level, imetal, imethod
-      INTG_PREC procnum, imetalSNIa
+      INTG_PREC procnum, imetalSNIa, smLevel
       R_PREC    d(nx,ny,nz), dm(nx,ny,nz), temp(nx,ny,nz)
       R_PREC    u(nx,ny,nz), v(nx,ny,nz), w(nx,ny,nz)
       R_PREC    r(nx,ny,nz), cooltime(nx,ny,nz)
@@ -93,9 +94,9 @@ c
       R_PREC   pi, G, sndspdC
       R_PREC   isosndsp2, starmass, starfraction, bmass, jeanmass
       R_PREC   max_mass, grad_rho, tau, phi, psi, f_s, t_ff, m_units
-      R_PREC   m_form
+      R_PREC   m_form, mstar
       R_PREC msolar
-      parameter (pi=pi_val, G=GravConst, 
+      parameter (pi=pi_val, G=GravConst,
      &           sndspdC=1.3095e8_RKIND,
      &           msolar=SolarMass)
 c
@@ -103,6 +104,7 @@ c
       max_mass = max_form_mass * msolar /dunits/dx**3/x1**3
       m_units = dunits * (x1*dx)**3._RKIND/msolar
       exptime = 1_IKIND
+
 !     print*,'star_maker3: imetal is:',imetal
 
 c
@@ -112,7 +114,7 @@ c
 c    is this the finest level of refinement ?
 c    is the density greater than a critical density ?
 c    is the flow convergent ?
-c    is the cooling time less than a dynamical time ? 
+c    is the cooling time less than a dynamical time ?
 c    is the gas mass greater than the Jeans mass?
 c
       do k=1+ibuff,nz-ibuff
@@ -122,16 +124,20 @@ c
 c              1) is this finest level of refinement?
 c
                if (r(i,j,k) .ne. 0._RKIND) goto 10
+c               if (level .eq. 6) write(*,*) "Level = ",level
 c
 c              2) is density greater than threshold?
 c
-               if (d(i,j,k) .lt. odthresh) goto 10
+                if (d(i,j,k) .lt. odthresh) then
+                  if (level .lt. smLevel) cycle
+                endif
+                if (level .lt. smLevel) cycle
 c
 c              3) is divergence negative?
-c                 (the first calculation is face centered for ZEUS, 
+c                 (the first calculation is face centered for ZEUS,
 c                  the second is cell-centered for PPM)
 c
-               if (imethod .eq. 2) then
+                if (imethod .eq. 2) then
                   div = u(i+1,j  ,k  ) - u(i,j,k)
      &                + v(i  ,j+1,k  ) - v(i,j,k)
      &                + w(i  ,j  ,k+1) - w(i,j,k)
@@ -141,18 +147,19 @@ c
      &                + w(i  ,j  ,k+1) - w(i  ,j  ,k-1)
                endif
                if (div .ge. 0._RKIND) goto 10
+c               if (level .eq. 6) write(*,*) "divergence =",div
 c
 c              4) t_cool < t_free-fall (if T < 1.1e4 skip this check)
 c
                dtot = ( d(i,j,k) + dm(i,j,k) )*dunits
                tdyn  = sqrt(3._RKIND*pi/32._RKIND/G/dtot)/t1
 
-               if (tdyn .lt. cooltime(i,j,k) .and. 
+               if (tdyn .lt. cooltime(i,j,k) .and.
      &             temp(i,j,k) .gt. 1.1e4_RKIND) goto 10
 c
 c              5) is M > M_Jeans? (this definition involves only baryons under
 c                 the assumption that the dark matter is stable, which
-c                 implies that the dark matter velocity dispersion is >> 
+c                 implies that the dark matter velocity dispersion is >>
 c                 the sound speed.  This will be true for small perturbations
 c                 within large halos).
 c
@@ -160,7 +167,7 @@ c
                isosndsp2 = sndspdC * temp(i,j,k)
                jeanmass = pi/(6._RKIND*sqrt(d(i,j,k)*dble(dunits))) *
      &                    dble(pi * isosndsp2 / G)**1.5_RKIND / msolar
-
+c               if (level .eq. 6) write(*,*) "MJeans =", jeanmass
 c
 c  THIS IS COMMENTED OUT - NO JEANS MASS CRITERION IN THIS ALGORITHM!!!
 c  BWO, 13 NOV 02 (fix 3 dec 02)
@@ -196,21 +203,22 @@ c
 c              is star mass greater than threshold, then make it.
 c              if it's less than threshold, go to the next cell.
 c
-              grad_rho = sqrt(((d(i+1, j, k) 
+              grad_rho = sqrt(((d(i+1, j, k)
      &                          - d(i-1, j, k))*dunits)**2_RKIND
      &                  + ((d(i, j+1, k) -d(i, j-1, k))*dunits)**2_RKIND
      &                  + ((d(i, j, k+1) - d(i,j,k-1))*dunits)**2_RKIND)
-              tau = 434.8_RKIND * d(i,j,k)*dunits 
+              tau = 434.8_RKIND * d(i,j,k)*dunits
      &                    * (dx*x1 + d(i,j,k) * dunits/grad_rho)
               phi = 0.756_RKIND *
      &           (1._RKIND+ 3.1_RKIND*metal(i,j,k)
      &           /0.02_RKIND)**0.365_RKIND
               psi = (0.6_RKIND * tau
      &               * (0.01+metal(i,j,k)/0.02_RKIND))
-     &               / (log(1_RKIND+0.06_RKIND 
+     &               / (log(1_RKIND+0.06_RKIND
      &               * phi + 0.01_RKIND
      &               * (phi)**2_RKIND))
               f_s = 1._RKIND - 3._RKIND/(1._RKIND+ 4._RKIND*psi)
+c              if (level .eq. 6) write(*,*) "shieldFrac =", f_s
               if (f_s .le. 0._RKIND) goto 10
               !write(6,*) "shielded fraction: ", f_s
               if (f_s .gt. 1._RKIND) f_s = 1._RKIND
@@ -234,9 +242,12 @@ c
                 write(6,*) "tried mass = ", f_s * d(i,j,k)/t_ff * m_units
                 ERROR_MESSAGE
               endif
-              write(6,*) "created star ptcl! MP =",mp(ii)*m_units, 
+        mstar = m_form*m_units
+#ifdef FORTRAN_DEBUG
+              write(6,*) "created star ptcl! MP =",mstar,
      &                     'overdensity = ', d(i,j,k), 'f_s = ',f_s,
      &                     'level =', level
+#endif
               tcp(ii) = t
               tdp(ii) = tdyn
 c              If discrete explosions are used, then use tdp as
@@ -286,28 +297,30 @@ c
 c               write(7+procnum,1000) level,bmass*starfraction,tcp(ii),
 c     &                           tdp(ii)*t1,d(i,j,k)*dunits,z,metalf(ii)
 c
-1000          format(i5,1x,6(1pe10.3,1x))
+ 1000          format(i5,1x,6(1pe10.3,1x))
 c
 c              Do not generate more star particles than available
 c
               if (ii .eq. nmax) goto 20
 
-10          continue
+ 10          continue
 
             enddo
          enddo
       enddo
  20   continue
-c	
+c
       if (ii .ge. nmax) then
          write(6,*) 'star_maker_mechanical: reached max new particle count'
          ERROR_MESSAGE
       endif
       np = ii
 c
-      ! if (np .ne. 0) then
-      !    write(6,*) 'Stars created: number,time,level: ', np, t, level
-      ! endif
+c#ifdef FORTRAN_DEBUG
+      if (np .ne. 0) then
+         write(6,*) 'Stars created: number,time,level: ', np, t, level
+      endif
+c#endif
 c
       return
       end
@@ -320,7 +333,7 @@ c
 c
 c    Routine to handle mechanical feedback from stars.  Creation is handled as
 c    star_maker3mom, i.e., Cen & Ostriker stochastic formation but with stars given
-c    the bulk velocity of progenitor gas.  
+c    the bulk velocity of progenitor gas.
 c
 c
 c    If SingleSN = 1, Supernova are handled discretely, drawing the probability of a SN II, Ia.
@@ -331,7 +344,7 @@ c    young particles have strong & fast winds from OB stars, old particles
 c    have slow winds from AGB.
 c
 c     This was imported from a very early version of enzo, and is missing some feed-
-c     back types: SNIa, cosmic rays, etc.  
+c     back types: SNIa, cosmic rays, etc.
 c=======================================================================
 c/////////////////////  SUBROUTINE STAR_FEEDBACK \\\\\\\\\\\\\\\\\\\\\\\
 c
@@ -345,7 +358,7 @@ c
      &               xp, yp, zp, up, vp, wp,
      &               mp, tdp, tcp, metalf, type,
      &               star_winds, single_sn, max_star_mass,
-     &               odthresh, deposit_unresolved, one_event, 
+     &               odthresh, deposit_unresolved, one_event,
      &               analytic_shell_mass)
 
 c
@@ -413,7 +426,7 @@ c
       INTG_PREC nx, ny, nz, ibuff, npart, idual, imetal,
      &      imulti_metals, imethod, single_sn,
      &      distrad, diststep, distcells, star_winds,
-     &      deposit_unresolved
+     &      deposit_unresolved, analytic_shell_mass
       R_PREC    d(nx,ny,nz), dm(nx,ny,nz), te(nx,ny,nz)
       R_PREC    u(nx,ny,nz), v(nx,ny,nz), w(nx,ny,nz)
       R_PREC    r(nx,ny,nz), ge(nx,ny,nz)
@@ -435,9 +448,9 @@ c    (msolar_e51 is one solar rest mass energy divided by 10^51 erg)
 c
       INTG_PREC n, ic, jc, kc, ip, jp, kp,
      &            i, j, k, a, ax, p, one_event, continual_formation,
-     &            n_events, np, analytic_shell_mass
+     &            n_events, np
       INTG_PREC n_sn_ii, n_sn_ia, iface, jface, kface
-      R_PREC   zcell, f_factor,
+      R_PREC   zcell, f_factor,m_cell,
      &         odthresh, div, grad_rho, dcell, acell,
      &         tau_cell, phi_cell, psi_cell, f_shielded,
      &         t_ff, m_form, modxba, num, denom, rmp, rpm,
@@ -474,7 +487,8 @@ c
      &    ' works with PPM hydro solver! method= ',imethod
         goto 10
       endif
-      continual_formation = 1_IKIND ! flag whether star particles continue 
+
+      continual_formation = 1_IKIND ! flag whether star particles continue
                                     ! to gain mass after formation
       track_sn = 1_IKIND ! tracks supernovae events in the tdp property
       n_events = 0_IKIND ! tracking number of SNe on this grid
@@ -492,7 +506,7 @@ c
 c   Loop over particles
 c
       do n=1_IKIND, npart
-        if (tcp(n) .gt. 0._RKIND .and. 
+        if (tcp(n) .gt. 0._RKIND .and.
      &          mp(n) .gt. 20.0/m_units .and.
      &          type(n) .eq. 2_IKIND) then
             np = np + 1_IKIND
@@ -562,7 +576,7 @@ c
             ypos = (yfc - ystart)/dx - 0.5_RKIND
             zpos = (zfc - zstart)/dx - 0.5_RKIND
             ic = int(xpos + 0.5_RKIND)
-            jc = int(ypos + 0.5_RKIND) 
+            jc = int(ypos + 0.5_RKIND)
             kc = int(zpos + 0.5_RKIND)
 c#ifdef FORTRAN_DEBUG
 c            write(6,*) 'new index: ',ic,jc,kc
@@ -610,7 +624,7 @@ c
             m_form = 0._RKIND
             zcell = metal(ic, jc, kc)
             dcell = d(ic,jc,kc) * dunits
-
+	    m_cell = d(ic,jc,kc) * m_units
             m_deposited = 0._RKIND
             do i = 1_IKIND, 3_IKIND
               p_deposited(i) = 0._RKIND
@@ -642,13 +656,13 @@ c
      &               * (phi_cell)**2_RKIND))
             f_shielded = 1_RKIND - 3_RKIND/(1_RKIND+ 4_RKIND*psi_cell)
             if (div .le. 0._RKIND .and. d(ic,jc,kc) .ge. odthresh
-     &        .and. f_shielded .gt. 0._RKIND 
+     &        .and. f_shielded .gt. 0._RKIND
      &        .and. mp(n) .le. max_mass
      &        .and. continual_formation .eq. 1_IKIND) then
               t_ff = sqrt(3._RKIND*pi / (32._RKIND * g * dcell))/t1
 #ifdef FORTRAN_DEBUG
               write(0,*) 'f, tff, d, dt: ',f_shielded,
-     &              t_ff*t1, d(ic,jc,kc)*m_units, dt
+     &              t_ff*t1, m_cell, dt
 #endif
               m_form = dt * f_shielded
      &                  *d(ic,jc,kc)*m_units / (t_ff)
@@ -659,7 +673,7 @@ c           add mass to star particle
 #endif
            m_form = m_form / m_units
             if (m_form .gt. 0._RKIND .and. mp(n)+m_form .lt. max_mass
-     &              .and. mp(n) .lt. max_mass) then 
+     &              .and. mp(n) .lt. max_mass) then
               mp(n) = mp(n) + m_form
             else
               if (m_form + mp(n) .gt. max_mass) then
@@ -668,7 +682,7 @@ c           add mass to star particle
               endif
             endif
 #ifdef FORTRAN_DEBUG
-            write(0,*) 'mass added to ptcl: ', m_form*m_units
+            write(6,*) 'mass added to ptcl: ', m_form*m_units
 #endif
             mstar = mp(n) * m_units
 c
@@ -747,7 +761,7 @@ c
                   else
                     temp = 0._RKIND
                     do ax = 1_IKIND, 3_IKIND
-                      temp = ahats(i,j,k,ax)*
+                      temp = temp+ahats(i,j,k,ax)*
      &                       xba(i,j,k,ax)
                     enddo
                     temp = temp / sqrt(mag_xba(i,j,k))
@@ -789,7 +803,7 @@ c
 !               enddo
 !             enddo
 ! !            ERROR_MESSAGE
-c 
+c
 c
 c               Although Hopkins 2017 has tensor corrections using plus/minus
 c                 vectors, this formulation does not require it, since
@@ -838,7 +852,7 @@ c
             n_sn_ia = 0._RKIND
             if (one_event .gt. 0._RKIND) then
               if (tdp(n) .gt. one_event) goto 110
-              if (tdp(n) .le. one_event 
+              if (tdp(n) .le. one_event
      &                .and. t .ge. tdp(n)*0.05) then
                 n_sn_ii = 1._RKIND
                 tdp(n) = tdp(n) + 1._RKIND
@@ -850,20 +864,20 @@ c
               write(6,*) 'P_ii: ', P_ii
               write(6,*) 'MP: ',mp(n)*m_units, 'dt: ', dt, 'T1: ',t1
               write(6,*) 'P_ii > 1.0!!'
-              write(6,*) 
+              write(6,*)
      &          'Need to reduce timesteps or reduce particle mass!!'
 c
 c       Allow a SNe or two to go off with no restrictions
 c         but after that, require that p_ii < 1 s.t. only 1 sne per timestep!
 c
-              if (t-tcp(n)*t1/3.14e13_RKIND .gt. 4.0) then 
+              if (t-tcp(n)*t1/3.14e13_RKIND .gt. 4.0) then
                 write(0,*) 'Too old and too high P_ii!!! Exiting!!!'
-                ERROR_MESSAGE 
+                ERROR_MESSAGE
               endif
             endif
-            if (random .le. P_ii 
+            if (random .le. P_ii
      &                .and. mstar .gt. 10.5) then
-               n_sn_ii = 1._RKIND 
+               n_sn_ii = 1._RKIND
             else
                n_sn_ii = 0._RKIND
             endif
@@ -882,9 +896,11 @@ c
 c              write(6,*) 'no supernova this step'
 !              write(0,*) 'P_ii=',P_ii, 'random = ', random
               goto 110
-!             else
-!               write(0,*) 'SUPERNOVA!!',n, n_sn_ii, n_sn_ia, 
-!     &          age
+c#ifdef FORTRAN_DEBUG
+              else
+                write(0,*) 'SUPERNOVA!!',n, n_sn_ii, n_sn_ia, 
+     &            age
+c#endif
             endif
 c
 c    5/?  Calculate mass ejected, metal ejected and energy from sn
@@ -938,7 +954,7 @@ c         a.) Mass loss; msun / Gyr
 c
 c        write(6,*) 'calculating winds'
 
- 110        if (star_winds .eq. 1_IKIND .and. 
+ 110        if (star_winds .eq. 1_IKIND .and.
      &              mstar .gt. 20._RKIND) then
               if (age < 1._RKIND) then
                     wind_factor = 4.763_RKIND
@@ -968,7 +984,7 @@ c
 #endif
                 m_winds = mp(n)*m_units
      &                    * wind_factor * dt * t1 / 3.14e16_RKIND
-                if (m_winds .gt. mp(n)*m_units) then 
+                if (m_winds .gt. mp(n)*m_units) then
                   m_winds = 0.054_RKIND*mp(n)*m_units
                   write(6,*) 'M_winds too large'
                 endif
@@ -977,7 +993,7 @@ c
                 m_eject = m_winds + m_eject
 c         b.) winds metals
                 wind_metal = (0.0278_RKIND + 0.0041_RKIND
-     &          * min(max(zcell/0.02_RKIND, 1.65_RKIND), 5.0)) * m_winds 
+     &          * min(max(zcell/0.02_RKIND, 1.65_RKIND), 5.0)) * m_winds
 #ifdef FORTRAN_DEBUG
               write(6,*) 'wind metal: ', wind_metal*m_units
 #endif
@@ -1001,14 +1017,14 @@ c              v_wind = sqrt(2_RKIND * psi_k * 10**12_RKIND)
 #ifdef FORTRAN_DEBUG
               write(0,*) 'e_winds: ', e_wind*e_units
               write(0,*) 'winds p: ', p_ej*p_units
-              write(0,*) 'wind mass: ',m_winds/m_units
+              write(0,*) 'wind mass: ',m_winds*m_units
 #endif
 
               if (e_wind*e_units .lt. 1e10_RKIND) goto 170
               if (e_wind * e_units .gt. 1e51_RKIND) then
                 write(0,*) "problematic wind energy: e_wind = ", e_wind*e_units
                 ERROR_MESSAGE
-              endif 
+              endif
               call mech_add_feedback(nbor, weights,weightsFinal,xba,
      &                        u, v, w,mu_field,d,ge,te,metal,
      &                        nx,ny,nz,ic,jc,kc,iface,
@@ -1035,28 +1051,33 @@ c    remove mass from particle
 c
 c       Error checking:
 c
-            if (mp(n)*m_units .lt. 5 .or. isnan(mp(n))) 
+            if (mp(n)*m_units .lt. 1e-5_RKIND .or. isnan(mp(n)))
      &                    write(0,*) "low mass = ", mp(n)*m_units
 #ifdef FORTRAN_DEBUG
           write(0,*) 'mp post: ', mp(n)*m_units
 !          write(0,*) 'm_deposited/m_ejected', m_deposited/m_eject
           write(0,*) 'e_deposited/e_ejected: ',
-     &                  e_deposited/(e_sn+e_wind)
+     &                  e_deposited/(e_sn+e_wind)/e_units
           write(0,*) '|P|: ', (p_deposited(1) + p_deposited(2)
      &                + p_deposited(3))*p_units
           write(0,*) 'Metal deposited/ejected: ',
      &          m_deposited/(metal_ejecta+wind_metal)
-          write(0,*) "mass of host cell: ", d(ic,jc,kc)*m_units
+          write(0,*) "mass of host cell: ", d(ic,jc,kc)/m_units
 #endif
           endif ! star particle calculation
  100    continue
         enddo    ! end loop over particles
 c#ifdef FORTRAN_DEBUG
-        if (n_events .gt. 0) then
-          write(6,*) "From NP = ", np, "Number of SNe = ", n_events,
-     &               "depositing E = ", e_deposited,
-     &               "n_events = ", one_event
+c#ifdef IFORT
+c!$ omp critical (printN)
+c#endif
+          if (n_events .gt. 0) then
+          write(0,*) "From NP = ", np, "Number of SNe = ", n_events,
+     &               "depositing E = ", e_deposited
         endif
+c#ifdef IFORT
+c!$ omp end critical (printN)
+c#endif
 c#endif
  10   return
       end
@@ -1102,6 +1123,7 @@ c
       implicit none
 #include "fortran_types.def"
 #include "error.def"
+#define FORTRAN_DEBUG
 c
 c     Arguments
 c
@@ -1145,13 +1167,13 @@ c
       else
           fz = (temp)**(-0.14_RKIND)
       endif
-      nb = d(ic,jc,kc)*d_units/1.67262171e-24_RKIND/mu(ic,jc,kc)   
+      nb = d(ic,jc,kc)*d_units/1.67262171e-24_RKIND/mu(ic,jc,kc)
       m_cell = d(ic, jc, kc)
       dmean = 0._RKIND
       mumean = 0._RKIND
 c
 c   Quantities needed for calculations; cooling radius r_cool,
-c     scalar distance between particles mod_xba, 
+c     scalar distance between particles mod_xba,
 c     mean of density dmean, and mean of weight mumean
 c
       do k = -1_IKIND, 1_IKIND
@@ -1163,11 +1185,11 @@ c
      &                / mu(ic+i,jc+j, kc+k))**(-3.0/7.0)
      &                * (e_sn/1e51_RKIND*e_units)**(2.0/7.0)*fz
      &                /xunits ! code_length
-            mod_xba(i+2,j+2,k+2) = 
+            mod_xba(i+2,j+2,k+2) =
      &              sqrt(xba(i+2,j+2,k+2, 1)*xba(i+2,j+2,k+2,1)
      &                  + xba(i+2,j+2,k+2,2)*xba(i+2,j+2,k+2,2)
      &                  + xba(i+2,j+2,k+2,3)*xba(i+2,j+2,k+2,3))
-            r_factor (i+2, j+2, k+2) = 
+            r_factor (i+2, j+2, k+2) =
      &              mod_xba(i+2,j+2, k+2)
      $                    / r_cool(i+2,j+2,k+2)
             mumean = mumean + mu(ic+i, jc+j, kc+k)
@@ -1203,22 +1225,22 @@ c       for unresolved pdV work done by the blastwave (not really applicable to 
 c       lower coupled energy in the first place, r_cool is very, very small.).  The leftover
 c       energy from winds is pushed into the host cell, while the mass from winds
 c       is coupled to neighbors as usual.
-c      
+c
 c   Set which momentum to use in coupling
       if (dxRatio_mean .gt. 1._RKIND) use_pt = 1_IKIND
 c
-c   if cooling radius is small then the coupled momentum 
-c     and kinetic energy goes to zero 
+c   if cooling radius is small then the coupled momentum
+c     and kinetic energy goes to zero
 c
-      if (1._RKIND / dxRatio_mean .lt. 1e-5_RKIND .and. use_pt .eq. 1_IKIND) 
+      if (1._RKIND / dxRatio_mean .lt. 1e-5_RKIND .and. use_pt .eq. 1_IKIND)
      &      e_couple = 0._RKIND
-      ! if the grid is coarse enough and r_c is long, we want to ignore unrealistic long-distnace coupling
-      if (rc_mean .gt. 1500 * 3.086e18_RKIND / xunits 
-     &    .and. dxRatio_mean .gt. 1._RKIND) 
+      ! if the grid is coarse enough and r_c is long, 
+      ! we want to ignore unrealistic long-distnace coupling
+      if (rc_mean .gt. 2000 * 3.086e18_RKIND / xunits)
      &    e_couple = 0._RKIND
 c
 c   Else, energy is is scaled by (r_c/xba)^6.5
-c 
+c
       if (use_pt .eq. 1_IKIND .and. e_couple .ne. 0._RKIND)
      &     e_couple = (dxRatio_mean)**(-6.5_RKIND)*e_sn
       if (e_couple .gt. e_sn) then
@@ -1228,7 +1250,7 @@ c
       endif
       if (isnan(e_couple)) then
         write(0,*) "wtf NaN energy"
-        write(0,*) "rcmean =",rc_mean, "xba_mean = ",xba_mean, 
+        write(0,*) "rcmean =",rc_mean, "xba_mean = ",xba_mean,
      &        'winds = ', winds, 'e_sn = ', e_sn *e_units
         ERROR_MESSAGE
       endif
@@ -1242,8 +1264,8 @@ c      write(0,*) "e_c, e_sn, Dep_unr =", e_couple, e_sn, deposit_unresolved
       if (e_couple .lt. e_sn) then
         if (deposit_unresolved .eq. 1_IKIND) then
           te(ic,jc,kc) = te(ic,jc,kc) + (e_sn-e_couple)/m_cell
-          if (idual .eq. 1_IKIND) 
-     &        ge(ic,jc,kc) = ge(ic,jc,kc) + (e_sn-e_couple)/m_cell 
+          if (idual .eq. 1_IKIND)
+     &        ge(ic,jc,kc) = ge(ic,jc,kc) + (e_sn-e_couple)/m_cell
           e_deposited = e_deposited + (e_sn-e_couple)*e_units
 c          write(0,*) 'deposited thermal energy :',(e_sn-e_couple)*e_units
         endif
@@ -1255,14 +1277,14 @@ c
           p_t = (4.8e5_RKIND*(nmean**(-1._RKIND/7._RKIND))
      &            *  (e_couple*e_units/1e51_RKIND)**(13._RKIND/14._RKIND)
      &            * fz)
-     &            / p_units  
+     &            / p_units
       endif
 c
 c   If using the terminal momenta, and if r_cool is anywhere near dx,
 c     we should account for mass swept up in the snowplough phase that will
-c     be distributed from the host cell, using that r_cool ~ R_pds from 
-c     Cioffi 1988 
-c 
+c     be distributed from the host cell, using that r_cool ~ R_pds from
+c     Cioffi 1988
+c
       p_couple = p_ej ![p_couple] = [code_momenta]
       if (use_pt .eq. 1_IKIND) p_couple=p_t
       m_couple = m_eject
@@ -1271,7 +1293,8 @@ c
       if (dxRatio_mean .lt. 100._RKIND .and.
      &    dxRatio_mean .gt. 0.1_RKIND .and.
      &    e_couple .gt. 0._RKIND .and.
-     &    analytic_shell_mass .eq. 1_IKIND) then
+     &    analytic_shell_mass .eq. 1_IKIND
+     &    .and. winds .eq. 0_IKIND) then
         v_shell = 413._RKIND * nmean **(1._RKIND/7._RKIND)
      &          *(zcell/0.02_RKIND)**(3._RKIND/14._RKIND)
      &          *(e_couple*e_units/1e51_RKIND)**(1._RKIND/14._RKIND)
@@ -1279,22 +1302,33 @@ c
         ! [v_shell] = km/s
         m_shell = ((p_couple*p_units)/v_shell) /m_units![m_shell] = code_p/code_v = code_m
 	 ! while we want to help cells evacuate, we dont want the cell density
-	 ! to plunge too low compared to its neighbors so limit 
-	 ! shell feedback to cells with density just above the level 
+	 ! to plunge too low compared to its neighbors so limit
+	 ! shell feedback to cells with density just above the level
 	 ! that would not form stars
 	      if (d(ic,jc,kc) .le. 0.125*odthresh) m_shell = 0.0
-        if (m_shell .gt. m_cell) then
-          write(0,*) "altered shell mass = ", 0.5*m_cell *m_units
-          m_shell = 0.5_RKIND*m_cell
+        if (m_shell .gt. d(ic,jc,kc)) then
+          write(0,*) "altered shell mass = ", 0.5*d(ic,jc,kc)*m_units
+          m_shell = 0.5_RKIND*d(ic,jc,kc)
         ! If the cells mass cannot support the mass of the shell (usually if the star has
         !  wandered into a low-density region), must rescale the coupled momenta to match
         !  the lower mass content of the cell
-          p_couple = sqrt(2._RKIND * (m_shell+m_eject)*e_couple) / p_units
+         ! p_couple = sqrt(2._RKIND * (m_shell+m_eject)*e_couple) / p_units
         endif
         if (m_shell .gt. 0._RKIND) then
           m_couple = m_shell+m_eject
         endif
       endif
+#ifdef FORTRAN_DEBUG
+      write(*,*) "Feedback Qtys:"
+      write(*,*) "Pars: analytic_shell = ", analytic_shell_mass, "use_pt = ", use_pt,
+     &            "deposit thermal = ", deposit_unresolved
+      write(*,*) "m_shell = ",m_shell*m_units, 
+     &    "p_coupled =", p_couple*p_units, "e_coupled =", e_couple*e_units,
+     &    "thermal_coupled =", (e_sn-e_couple)*e_units,
+     &    "v_shell =", v_shell, "dxRatio =",dxRatio_mean, "R_c = ", rc_mean*xunits,
+     &    "dxMean = ", xba_mean*xunits, "dmean =", dmean*d_units, "nmean = ",nmean,
+     &    "mumean = ",mumean
+#endif
 c
       do k = -1_IKIND, +1_IKIND
          do j = -1_IKIND, +1_IKIND
@@ -1308,13 +1342,13 @@ c
             delta_e = e_couple * scalar_weight
             delta_metal = metal_ejecta * scalar_weight + m_shell*metal(ic,jc,kc)
             if (isnan(delta_metal)) then
-              write(0,*) "nan Dmetal: z_ej = ",metal_ejecta*m_units, 
+              write(0,*) "nan Dmetal: z_ej = ",metal_ejecta*m_units,
      &                    'cell metal =', metal(ic,jc,kc),
      &                    'm_shell =', m_shell*m_units
               ERROR_MESSAGE
             endif
               do a = 1_IKIND, 3_IKIND
-                temp = sqrt(1._RKIND+m_cell/m_couple)
+                temp = sqrt(1._RKIND+dmean/m_couple)
                 if (use_pt .eq. 1_IKIND) then
                   delta_p(a) = p_couple * weightsFinal(i+2,j+2,k+2,a)
                 else
@@ -1371,21 +1405,25 @@ c
 c
 c     Add increase in kinetic energy to the total energy field
 c
-                      temp = ((delta_pu*p_units)**2 + (delta_pv*p_units)**2 
+                      temp = ((delta_pu*p_units)**2 + (delta_pv*p_units)**2
      &                                              + (delta_pw*p_units)**2)
      &                        / (2._RKIND*delta_mass*m_units) ![p] = (Msun*km/s)^2/Msun = Msun (km/s)^2
                       temp = temp * 2e33*1e10
                       if (delta_mass .eq. 0._RKIND) temp = 0._RKIND
                       if ((delta_therm*e_units) .gt. 1e51_RKIND .or. 
-     &                  (temp) .gt. 1.0e51_RKIND) then
+     &                    temp .gt. 2.0e51_RKIND) then
                         write(6,*) "Dtherm explosion: dt: ",delta_therm*e_units,
-     &                    'ke: ',temp*e_units,'mass dep: ',delta_mass*m_units,
+     &                    'ke: ',temp,'mass dep: ',delta_mass*m_units,
      &                    'use_pt: ', use_pt, 'r_cool: ', rc_mean*xunits/3.086e18_RKIND,
      &                    'e_couple: ', e_couple*e_units, 'winds: ',winds, 'nmean: ',nmean,
      &                    'dmean: ',dmean, 'mumean: ',mumean, 'mass ratio: ', sqrt(1+m_cell/delta_m),
-     &                    'p_ej: ',p_ej*p_units, 'pu: ',delta_pu*p_units, 
+     &                    'p_ej: ',p_ej*p_units, 'pu: ',delta_pu*p_units,
      &                    'dxratio: ', dxRatio_mean, 'm_shell: ',m_shell*m_units,
-     &                    'v_shell: ',v_shell, 'p_t =', p_t*p_units, 'z=',zcell/0.02
+     &                    'v_shell: ',v_shell, 'p_t =', p_t*p_units, 'z=',zcell/0.02,
+     &                    'analytic_shell =',analytic_shell_mass
+#ifdef IFORT
+!$omp end critical (writeWarnings)
+#endif
                       endif
 
                       if (delta_therm * e_units .gt. 1e51_RKIND) then
@@ -1395,7 +1433,7 @@ c
                         ERROR_MESSAGE
                       endif
 
-                      e_deposited = e_deposited 
+                      e_deposited = e_deposited
      &                                + temp
                       if (isnan(temp)) then
                         write(6,*) "WTF NaN kinetic energy!"
@@ -1406,7 +1444,7 @@ c
      &                        'e_sn = ', e_sn*e_units,
      &                        'e_couple = ',e_couple*e_units,
      &                        'rc = ', rc_mean, 'xba =', xba_mean,
-     &                        'weight = ',scalar_weight, 
+     &                        'weight = ',scalar_weight,
      &                        'vol frac = ',dxc1*dyc1*dzc1,
      &                        'couple mass = ', delta_m,
      &                        'use_pt = ', use_pt,
@@ -1414,7 +1452,7 @@ c
      &                        'nmean = ', nmean,
      &                        'dmean = ', dmean,
      &                        'final weight = ', weightsFinal(i+2, j+2, k+2,1),
-     &                        weightsFinal(i+2, j+2, k+2,2),weightsFinal(i+2, j+2, k+2,3)  
+     &                        weightsFinal(i+2, j+2, k+2,2),weightsFinal(i+2, j+2, k+2,3)
                         ERROR_MESSAGE
                       endif
 c
@@ -1426,7 +1464,7 @@ c
                            metal(ic+i1, jc+j1, kc+k1) =
      &                          metal(ic+i1, jc+j1, kc+k1) +
      &                          delta_z/d(ic+i1,jc+j1,kc+k1)
-                           m_deposited = m_deposited + 
+                           m_deposited = m_deposited +
      &                              delta_z
 
                         endif
@@ -1444,8 +1482,11 @@ c
       enddo
       if (m_shell .gt. d(ic,jc,kc)) then
         write(6,*) "shell mass > cell mass!"
+        write(6,*) "shell_mass = ", m_shell * m_units
+        write(6,*) "cell_mass = ", d(ic,jc,kc) * m_units
         ERROR_MESSAGE
       endif
+    !   Take shell mass out of the host cell of the particle
       if (m_shell .gt. 0._RKIND) d(ic,jc,kc) = d(ic,jc,kc) - m_shell
 c
 c
