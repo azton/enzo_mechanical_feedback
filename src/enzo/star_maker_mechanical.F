@@ -131,7 +131,7 @@ c
                 if (d(i,j,k) .lt. odthresh) then
                   if (level .lt. smLevel) cycle
                 endif
-                if (level .lt. smLevel) cycle
+
 c
 c              3) is divergence negative?
 c                 (the first calculation is face centered for ZEUS,
@@ -469,7 +469,7 @@ c
       R_PREC pm(3,3,3,3,2)
       R_PREC dxf, dyf, dzf, dxc, dyc, dzc, xfc, yfc, zfc,
      &     xfcshift,yfcshift,zfcshift, xpos, ypos, zpos,
-     &     xface, yface, zface, face_shift
+     &     xface, yface, zface, face_shift, fb_multiplier
       R_PREC Zsol, energy_51, eunits, e_const, ergs_51, fbuff, pi
       R_PREC msolar, msolar_e51, mH, g, mstar, age, max_mass, track_sn
 
@@ -490,6 +490,8 @@ c
 
       continual_formation = 1_IKIND ! flag whether star particles continue
                                     ! to gain mass after formation
+      fb_multiplier = 1._RKIND !testing flag to multiply the feedback qtys from SNe
+                                ! Will modify ALL coupled quantities
       track_sn = 1_IKIND ! tracks supernovae events in the tdp property
       n_events = 0_IKIND ! tracking number of SNe on this grid
       e_deposited = 0._RKIND ! tracking total amount of energy deposited this grid
@@ -797,12 +799,6 @@ c
                 enddo
               enddo
             enddo
-!             do i = 1_IKIND, 3_IKIND
-!               do j = 1_IKIND, 3_IKIND
-!                 write(6,*) weightsFinal(i,j,1,2)
-!               enddo
-!             enddo
-! !            ERROR_MESSAGE
 c
 c
 c               Although Hopkins 2017 has tensor corrections using plus/minus
@@ -898,7 +894,7 @@ c              write(6,*) 'no supernova this step'
               goto 110
 c#ifdef FORTRAN_DEBUG
               else
-                write(0,*) 'SUPERNOVA!!',n, n_sn_ii, n_sn_ia, 
+                write(6,*) 'SUPERNOVA!!',n, n_sn_ii, n_sn_ia, 
      &            age
 c#endif
             endif
@@ -911,18 +907,18 @@ c
 
 c
 c         i.) mass in Msun of metal from type II
-            snii_metals = n_sn_ii * (1.91_RKIND
+            snii_metals = fb_multiplier*n_sn_ii * (1.91_RKIND
      &                   + 0.0479*MAX(zcell/0.02_RKIND, 1.65_RKIND))
-            m_eject = m_eject + n_sn_ii * 10.5_RKIND
+            m_eject = m_eject + fb_multiplier*n_sn_ii * 10.5_RKIND
 c         ii.) mass in Msun of metals from type Ia
-            snia_metals = n_sn_ia * 1.4_RKIND
-            m_eject = m_eject + n_sn_ia * 1.4_RKIND
+            snia_metals = fb_multiplier*n_sn_ia * 1.4_RKIND
+            m_eject = m_eject + fb_multiplier*n_sn_ia * 1.4_RKIND
             if (m_eject .ge. mp(n)*m_units) then
               m_eject = 0._RKIND
               goto 170
             endif
 c         iii.) energy in supernova (simple assuming 1e51 ergs/sn)
-            e_sn = 1.0e51_RKIND * (n_sn_ia + n_sn_ii) / e_units
+            e_sn = fb_multiplier*1.0e51_RKIND * (n_sn_ia + n_sn_ii) / e_units
 c
 c    6/? send to add_feedback subroutine with supernova feedback values
 c
@@ -1067,18 +1063,18 @@ c
           endif ! star particle calculation
  100    continue
         enddo    ! end loop over particles
-c#ifdef FORTRAN_DEBUG
-c#ifdef IFORT
-c!$ omp critical (printN)
-c#endif
+#ifdef FORTRAN_DEBUG
+#ifdef IFORT
+!$ omp critical (printN)
+#endif
           if (n_events .gt. 0) then
-          write(0,*) "From NP = ", np, "Number of SNe = ", n_events,
+          write(6,*) "From NP = ", np, "Number of SNe = ", n_events,
      &               "depositing E = ", e_deposited
         endif
-c#ifdef IFORT
-c!$ omp end critical (printN)
-c#endif
-c#endif
+#ifdef IFORT
+!$ omp end critical (printN)
+#endif
+#endif
  10   return
       end
 c
@@ -1123,7 +1119,7 @@ c
       implicit none
 #include "fortran_types.def"
 #include "error.def"
-#define FORTRAN_DEBUG
+#define NO_FORTRAN_DEBUG
 c
 c     Arguments
 c
@@ -1209,25 +1205,21 @@ c
       dxRatio_mean = sum(r_factor)/26._RKIND
       use_pt = 0_IKIND
       e_couple = e_sn
- !     if (rc_mean*xunits/3.086e18 .gt. 2000._RKIND
- !    &    .or. isnan(rc_mean)) then
-    !   write(0,*) "Large R_c: Rc =",rc_mean*xunits/3.086e18,
-    !  &        'dx =', xba_mean*xunits/3.086e18_RKIND,
-    !  &        "E_sn = ",e_sn*e_units, "dmean =",dmean*d_units,
-    !  &        "zcell = ",zcell,"fz =", fz
-  !     endif
+
 c
 c     According to Hopkins, we should use p = p_ej * min(sqrt(1+m_cell/m_ej), p_t/p_ej)), where
-c       the first case implies r_cool is resolved.  Here, we have easy access to r_cool (and
-c       it makes sense to think of distances in enzo instead of masses in gizmo) so if r_cool < xba,
-c       the cooling radius is resolved.  else, we must decrease the coupled energy to account
+c       the first case implies r_cool is resolved.  else, we must decrease the coupled energy to account
 c       for unresolved pdV work done by the blastwave (not really applicable to winds since they have such
 c       lower coupled energy in the first place, r_cool is very, very small.).  The leftover
 c       energy from winds is pushed into the host cell, while the mass from winds
 c       is coupled to neighbors as usual.
 c
 c   Set which momentum to use in coupling
-      if (dxRatio_mean .gt. 1._RKIND) use_pt = 1_IKIND
+      p_t = (4.8e5_RKIND*(nmean**(-1._RKIND/7._RKIND))
+     &            *  (e_couple*e_units/1e51_RKIND)**(13._RKIND/14._RKIND)
+     &            * fz)
+     &            / p_units
+      if (dxRatio_mean > 1.0) use_pt = 1_IKIND
 c
 c   if cooling radius is small then the coupled momentum
 c     and kinetic energy goes to zero
@@ -1278,6 +1270,7 @@ c
      &            *  (e_couple*e_units/1e51_RKIND)**(13._RKIND/14._RKIND)
      &            * fz)
      &            / p_units
+        write(*,*) "R_c = ",rc_mean*xunits/3.086e18,"for pt=1"
       endif
 c
 c   If using the terminal momenta, and if r_cool is anywhere near dx,
@@ -1324,7 +1317,7 @@ c
      &            "deposit thermal = ", deposit_unresolved
       write(*,*) "m_shell = ",m_shell*m_units, 
      &    "p_coupled =", p_couple*p_units, "e_coupled =", e_couple*e_units,
-     &    "thermal_coupled =", (e_sn-e_couple)*e_units,
+     &    "thermal_coupled =", (e_sn-e_couple)*e_units, "odthresh = ",odthresh,
      &    "v_shell =", v_shell, "dxRatio =",dxRatio_mean, "R_c = ", rc_mean*xunits,
      &    "dxMean = ", xba_mean*xunits, "dmean =", dmean*d_units, "nmean = ",nmean,
      &    "mumean = ",mumean
@@ -1348,7 +1341,7 @@ c
               ERROR_MESSAGE
             endif
               do a = 1_IKIND, 3_IKIND
-                temp = sqrt(1._RKIND+dmean/m_couple)
+                temp = sqrt(1._RKIND+dmean/(m_eject*scalar_weight))
                 if (use_pt .eq. 1_IKIND) then
                   delta_p(a) = p_couple * weightsFinal(i+2,j+2,k+2,a)
                 else
@@ -1407,7 +1400,7 @@ c     Add increase in kinetic energy to the total energy field
 c
                       temp = ((delta_pu*p_units)**2 + (delta_pv*p_units)**2
      &                                              + (delta_pw*p_units)**2)
-     &                        / (2._RKIND*delta_mass*m_units) ![p] = (Msun*km/s)^2/Msun = Msun (km/s)^2
+     &                        / (2._RKIND*d(ic+i1 ,jc+j1 ,kc+k1)*m_units) ![p] = (Msun*km/s)^2/Msun = Msun (km/s)^2
                       temp = temp * 2e33*1e10
                       if (delta_mass .eq. 0._RKIND) temp = 0._RKIND
                       if ((delta_therm*e_units) .gt. 1e51_RKIND .or. 
