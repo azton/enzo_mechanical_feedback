@@ -1,0 +1,32 @@
+Mechanical Stars in ENZO!
+This method is based on Hopkins et al. 2017 (FIRE-2 collaboration). 
+The supernova rates, winds energy are taken from that paper where they were generated using Starburst 99 simulation.
+
+The method uses a cloud of 27 particles that are coupled (momentum and mass) to the origin particle.  
+They are then CIC deposited to the surrounding grid.  Several parameters are introduced to control this 
+star maker method (found in star_maker_mechanical.F)
+  
+    StellarWinds  = binary (0-off, 1-on)
+    SingleSN      = binary (0-off, 1-on: supernova are modeled probabilistically, off uses no supernova feedback)
+    DepositUnresolvedEnergyAsThermal = binary (0-off, 1-on: Energy is reduced outside the cooling radius if
+                                  r_cool is unresolved by du = (dx/r_cool)^-6.5.
+                                  if on, the remaining energy will be deposited in the host cell as thermal energy)
+    AnalyticSNRShellMass  = binary (0-off, 1-on: When coupling outside the immediate supernova, there is a modification to
+                                    to increase the mass coupled to neighbors (this mass is removed from the host cell, 
+                                    not the star particle), which simulates the increased shell mass of the SNR.
+                                    It is calculated by calculating v_shell (Cioffi 1988), and then modifying 
+                                    m_coupled as m_couple = p_couple/v_shell)
+    NEvents       = if > 0; testing flag to set number of supernova to enable per particle.  Each supernova will go off 
+                                                    in sequential timesteps
+    StarMakerMaximumMass = maximum allowable mass including subsequent formation after the initial particle formation.
+                                            sets the maximum timestep at the star formation level
+    StarMakerMaximumFormationMass = maximum initial mass of star particle.  should be > 1000 to ensure that the particle
+                                               can fully sample the IMF.
+    StarMakerMinimumRefinementLevel = minimum level you would like star formation to occur.  this limits the timestep
+                                       on this and higher levels so that P(SNe) < 1..
+    StarMakerOverDensityThreshold = minimum overdensity you would like star formation to occur at. usually the density
+                                                    expected at StarMakerMinimumRefinementLevel
+    If running TestStarParticle
+      NumberOfTestStars = number of stars you want in the box
+      clusterRadius = maximum portion of box to allow star particles (fraction of box).  the particles will only
+                    be placed within the box within [0.5, 0.5, 0.5] +/- clusterRadius
