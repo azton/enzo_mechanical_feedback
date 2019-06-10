@@ -463,9 +463,9 @@ float grid::ComputeTimeStep(int level)
     ENZO_FAIL("Error in GetUnits.");
   }
   float dtStar = huge_number;
-  if (STARMAKE_METHOD(MECHANICAL)){
+  if (STARFEED_METHOD(MECHANICAL)){
     if (level >= StarMakeLevel){
-      float pSNmax = 0.0005408 * StarMakerMaximumFormationMass * dt * TimeUnits/3.15e13*1.25;
+      float pSNmax = 0.0005408 * StarMakerMaximumMass * dt * TimeUnits/3.15e13*1.25;
       if (pSNmax > 1.0) 
         dtStar = dt * 1.0/pSNmax;
     }
