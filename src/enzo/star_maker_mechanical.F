@@ -745,9 +745,15 @@ c
                       temp = temp+ahats(i,j,k,ax)*
      &                       xba(i,j,k,ax)
                     enddo
-                    temp = temp / sqrt(mag_xba(i,j,k))
-                    weights(i,j,k) = 0.5_RKIND*(1_RKIND-1_RKIND/(sqrt(1._RKIND
+                    if (mag_xba(i,j,k) .eq. 0._RKIND) then
+                      temp = 0.0
+                      weights(i,j,k) = 0.0
+                    else
+                      temp = temp / sqrt(mag_xba(i,j,k))
+                    
+                      weights(i,j,k) = 0.5_RKIND*(1_RKIND-1_RKIND/(sqrt(1._RKIND
      &                            + temp/(pi*mag_xba(i,j,k)))))
+                    endif
                     sum_weights = sum_weights + weights(i,j,k)
                   endif
                 enddo
@@ -1348,10 +1354,16 @@ c
             delta_e = e_couple * scalar_weight
             delta_metal = metal_ejecta * scalar_weight + m_shell*metal(ic,jc,kc)
             if (isnan(delta_metal)) then
-              write(0,*) "nan Dmetal: z_ej = ",metal_ejecta*m_units,
+              if (scalar_weight .eq. 0._RKIND) then
+                delta_metal = 0._RKIND
+              else
+                write(0,*) "nan Dmetal: z_ej = ",metal_ejecta*m_units,
      &                    'cell metal =', metal(ic,jc,kc),
-     &                    'm_shell =', m_shell*m_units
-              ERROR_MESSAGE
+     &                    'm_shell =', m_shell*m_units,
+     &                    'scalar weight =', scalar_weight,
+     &                    'i,j,k = ', i,j,k
+                ERROR_MESSAGE
+              endif
             endif
               do a = 1_IKIND, 3_IKIND
                 temp = sqrt(1._RKIND+dmean/(m_eject*scalar_weight))
@@ -1413,7 +1425,6 @@ c     Add increase in kinetic energy to the total energy field
 c
                       temp = ((delta_pu*p_units)**2 + (delta_pv*p_units)**2
      &                                              + (delta_pw*p_units)**2)
-<<<<<<< HEAD
      &                        / (2._RKIND*delta_mass*m_units) ![p] = (Msun*km/s)^2/Msun = Msun (km/s)^2
                       temp = temp * SolarMass*1e10
     !                   fge(ic+i1, jc+j1, kc+k1) =fge(ic+i1, jc+j1, kc+k1)+
@@ -1424,25 +1435,6 @@ c
                       if (delta_mass .eq. 0._RKIND) temp = 0._RKIND
 c
 c
-=======
-     &                        / (2._RKIND*d(ic+i1,jc+j1,kc+k1)*m_units) ![p] = (Msun*km/s)^2/Msun = Msun (km/s)^2
-                      temp = temp * SolarMass*1e10_RKIND
-            		      te(ic+i1, jc+j1, kc+k1) = te(ic+i1, jc+j1, kc+k1)
-     &		      		       	      + temp/e_units/d(ic+i1,jc+j1, kc+k1)
-!                      if (delta_mass .eq. 0._RKIND) temp = 0._RKIND
-!                      if ((delta_therm*e_units) .gt. 1e52_RKIND .or. 
-!     &                    temp .gt. 1.0e52_RKIND) then
-!                        write(6,*) "Dtherm explosion: dt: ",delta_therm*e_units,
-!     &                    'ke: ',temp,'mass dep: ',delta_mass*m_units,
-!     &                    'use_pt: ', use_pt, 'r_cool: ', rc_mean*xunits/3.086e18_RKIND,
-!     &                    'e_couple: ', e_couple*e_units, 'winds: ',winds, 'nmean: ',nmean,
-!     &                    'dmean: ',dmean, 'mumean: ',mumean, 'mass ratio: ', sqrt(1+m_cell/delta_m),
-!     &                    'p_ej: ',p_ej*p_units, 'pu: ',delta_pu*p_units,
-!     &                    'dxratio: ', dxRatio_mean, 'm_shell: ',m_shell*m_units,
-!     &                    'v_shell: ',v_shell, 'p_t =', p_t*p_units, 'z=',zcell/0.02,
-!     &                    'analytic_shell =',analytic_shell_mass
-!                      endif
->>>>>>> 80b32a9b9c600cd7580fe9ae0ac12cf10c064d06
                       if (delta_therm * e_units .gt. 1e51_RKIND) then
                         write(6,*) "Dtherm explosion: E_couple = ",e_couple*e_units,
      &                      "E_sn= ", e_sn*e_units, "rc/xba = ", (rc_mean/xba_mean)**6.5_RKIND,
