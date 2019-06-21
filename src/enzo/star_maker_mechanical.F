@@ -720,8 +720,12 @@ c
               do j = 1_IKIND, 3_IKIND
                 do i = 1_IKIND, 3_IKIND
                   do ax = 1_IKIND, 3_IKIND
-                    ahats(i,j,k,ax) = 4.8_RKIND*pi/26._RKIND
+                    if (mag_xba(i,j,k) .eq. 0._RKIND) then
+                      ahats(i,j,k,ax) = 0._RKIND
+                    else
+                      ahats(i,j,k,ax) = 4.8_RKIND*pi/26._RKIND
      &                             * xba(i,j,k,ax)/sqrt(mag_xba(i,j,k))
+                    endif
                   enddo
                 enddo
               enddo
