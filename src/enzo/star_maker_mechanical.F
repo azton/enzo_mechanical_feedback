@@ -426,11 +426,9 @@ c
      &          snia_metals, e_sn, p_ej, v_wind, ke_post,
      &          e_wind, P_ii, P_ia, adotx, m_units,
      &          m_deposited, e_deposited, p_units, e_units
-      R_PREC mag_xba(3,3,3)
+      R_PREC mag_xba(3,3,3), weights(3,3,3)
       R_PREC xba(3,3,3,3), p_deposited(3), ahats(3,3,3,3)
-      R_PREC nbor(3,3,3,3)
-      R_PREC weightsFinal(3,3,3,3)
-      R_PREC weights(3,3,3)
+      R_PREC nbor(3,3,3,3), weightsFinal(3,3,3,3)
       R_PREC dxf, dyf, dzf, dxc, dyc, dzc, xfc, yfc, zfc,
      &     xfcshift,yfcshift,zfcshift, xpos, ypos, zpos,
      &     xface, yface, zface, face_shift, e_diff
@@ -469,6 +467,7 @@ c
      &          mp(n) .gt. 20.0/m_units .and.
      &          type(n) .eq. 2_IKIND) then
             np = np + 1_IKIND
+            if (tdp(n) .gt. 1e5_RKIND) tdp(n) = tdp(n) / 1.0e51_RKIND 
 c
 c   center of feedback zone
 c
@@ -479,8 +478,12 @@ c
             if (xp(n) .lt. xstart .or. xp(n) .gt. xstart+dx*nx .or.
      &          yp(n) .lt. ystart .or. yp(n) .gt. ystart+dx*ny .or.
      &          zp(n) .lt. zstart .or. zp(n) .gt. zstart+dx*nz) then
-               write(6,*) 'warning: star particle out of grid',
-     &              xp(n),yp(n),zp(n), xstart, ystart, zstart, ip,jp,kp
+c               write(6,*) 'warning: starOOG ',
+c     &              tdp(n), n, xp(n),yp(n),zp(n), 
+c     &              xstart, ystart, zstart, 
+c     &              ip,jp,kp,
+c     &              up(n), vp(n), wp(n),
+c     &              mp(n), tcp(n), metalf(n)
                goto 100
             endif
 c
@@ -588,6 +591,7 @@ c
 c
 c           a.) divergence of the gas
 c
+            if (mp(n) .gt. max_mass) goto 999
             if (imethod .eq. 2) then
                   div = u(ic+1,jc  ,kc  ) - u(ic,jc,kc)
      &                + v(ic  ,jc+1,kc  ) - v(ic,jc,kc)
@@ -639,7 +643,7 @@ c           add mass to star particle
 #ifdef FORTRAN_DEBUG
             write(6,*) 'mass added to ptcl: ', m_form*m_units
 #endif
-            mstar = mp(n) * m_units
+
 c
 c           remove mass from the grid cell.
 c
@@ -657,6 +661,7 @@ c           get a list of positions of neighbor "particles"
 c    __ Construct Neighbor particle mask that acts as coupled particles for deposition
 c
 
+ 999        mstar = mp(n) * m_units
             do k = 1_IKIND, 3_IKIND
               do j = 1_IKIND, 3_IKIND
                 do i = 1_IKIND, 3_IKIND
@@ -814,14 +819,14 @@ c
             call random_number(random)
             n_sn_ii = 0._RKIND
             n_sn_ia = 0._RKIND
-            if (one_event .gt. 0._RKIND) then
-              if (tdp(n)/1e51_RKIND .gt. one_event) goto 110
-              if (tdp(n)/1e51_RKIND .le. one_event) then
-                n_sn_ii = 1._RKIND
-!               tdp(n) = tdp(n) + 1._RKIND
-                goto 130
-              endif
-            endif
+c            if (one_event .gt. 0._RKIND) then
+c              if (tdp(n)/1e51_RKIND .gt. one_event) goto 110
+c              if (tdp(n)/1e51_RKIND .le. one_event) then
+!                 n_sn_ii = 1._RKIND
+! c               tdp(n) = tdp(n) + 1._RKIND
+c                 goto 130
+!               endif
+c            endif
             P_ii = mstar * R_ii*dt*t1/3.14e13_RKIND
             if (P_ii .gt. 1._RKIND) then
               write(6,*) 'P_ii: ', P_ii
@@ -990,27 +995,31 @@ c              v_wind = sqrt(2_RKIND * psi_k * 10**12_RKIND)
      &                        analytic_shell_mass, ke_pre)
             endif ! star_winds == 1
 c    remove mass from particle
-#ifdef FORTRAN_DEBUG
-               write(0,*) 'total mass loss: ', m_eject * m_units
-#endif
+c#ifdef FORTRAN_DEBUG
+170           if (mp(n)*m_units .lt. 100._RKIND) then
+                  write(6,*) 'total mass loss: ', m_eject * m_units,
+     &                    'particle mass = ', mp(n) * m_units
+              endif
+c#endif
 c
 c       One last check; if the mass of particle is negative, set to ~0
 c
- 170           mp(n) = mp(n) - m_eject
-            if (mp(n) .lt. 0._RKIND) mp(n) = 1e-20
+            mp(n) = mp(n) - m_eject
+              if (mp(n) .lt. 0._RKIND) mp(n) = 1._RKIND
 c
 c     If any events happened, need to deposit the kinetic energy change
 c         into the te field (if using dual energy)
 c
-            if (n_sn_ii .gt. 0_IKIND .or. n_sn_ia .gt. 0_IKIND) then
+          if (n_sn_ii .gt. 0_IKIND .or. n_sn_ia .gt. 0_IKIND) then
             do k = -1_IKIND, 2_IKIND
               do j = -1_IKIND, 2_IKIND
                 do i = -1_IKIND, 2_IKIND
                   if (idual .eq. 1) te(ic+i, jc+j, kc+k) =
      &                    te(ic+i,jc+j,kc+k)
      &                    +(ke_pre(i+2,j+2,k+2)/e_units)/d(ic+i,jc+j,kc+k)
+                  if (tdp(n) .gt. 1e5_RKIND) tdp(n) = tdp(n) / 1.0e51_RKIND
                   if (track_sn .eq. 1) tdp(n) = tdp(n)
-     &                    +(ke_pre(i+2,j+2,k+2))
+     &                    +(ke_pre(i+2,j+2,k+2)/1.0e51_RKIND)
                   e_deposited = e_deposited +
      &                      ke_pre(i+2,j+2,k+2)
 c                  write(0,*) 'depositing e = ', ke_pre(i+2, j+2, k+2)
@@ -1025,26 +1034,27 @@ c                  write(0,*) 'depositing e = ', ke_pre(i+2, j+2, k+2)
 c
 c       Error checking:
 c
-#ifdef FORTRAN_DEBUG
-          write(0,*) 'mp post: ', mp(n)*m_units
-          write(0,*) 'e_deposited/e_ejected: ',
-     &                  e_deposited/((e_sn+e_wind)*e_units)
-          write(0,*) '|P|: ', (p_deposited(1) + p_deposited(2)
-     &                + p_deposited(3))*p_units
-          write(0,*) 'Metal deposited/ejected: ',
-     &          m_deposited/(metal_ejecta+wind_metal)
-          write(0,*) "mass of host cell: ", d(ic,jc,kc)/m_units
-#endif
+! #ifdef FORTRAN_DEBUG
+c          if (mp(n)*m_units .lt. 1000._RKIND) 
+c     &         write(0,*) 'mp post: ', mp(n)*m_units
+!           write(0,*) 'e_deposited/e_ejected: ',
+!      &                  e_deposited/((e_sn+e_wind)*e_units)
+!           write(0,*) '|P|: ', (p_deposited(1) + p_deposited(2)
+!      &                + p_deposited(3))*p_units
+!           write(0,*) 'Metal deposited/ejected: ',
+!      &          m_deposited/(metal_ejecta+wind_metal)
+!           write(0,*) "mass of host cell: ", d(ic,jc,kc)/m_units
+! #endif
           endif ! star particle calculation
  100    continue
         enddo    ! end loop over particles
-c#ifdef FORTRAN_DEBUG
+#ifdef FORTRAN_DEBUG
 
           if (n_events .gt. 0) then
           write(0,*) "From NP = ", np, "Number of SNe = ", n_events,
      &               "depositing E = ", e_deposited
         endif
-c#endif
+#endif
  10   return
       end
 c
@@ -1273,15 +1283,28 @@ c
      &          *(dxRatio_mean)**(-7._RKIND/3._RKIND)
         ! [v_shell] = km/s
         m_shell = ((p_couple*p_units)/v_shell) /m_units![m_shell] = code_p/code_v = code_m
+c
+c
 	 ! while we want to help cells evacuate, we dont want the cell density
 	 ! to plunge too low compared to its neighbors, so limit
 	 ! shell feedback to cells with density > 1/8 star forming density
 	 ! that would not form stars
-	      if (d(ic,jc,kc) .le. 0.125*odthresh) m_shell = 0.0
-        if (m_shell .gt. d(ic,jc,kc)) then
-          m_shell = 0.5_RKIND*d(ic,jc,kc)
-        endif
-        if (m_shell .gt. 0._RKIND) then
+c
+c
+        do k = 0_IKIND, 1_IKIND
+          do j = 0_IKIND, 1_IKIND
+            do i = 0_IKIND, 1_IKIND
+              if (d(ic+i,jc+j,kc+k) .le. 0.5*odthresh) then
+                m_shell = 0.0
+                goto 120
+              endif
+              if (m_shell/8._RKIND .gt. d(ic+i,jc+j,kc+k)) then
+                m_shell = 0.5_RKIND*d(ic+i,jc+j,kc+k)
+              endif
+            enddo
+          enddo
+        enddo
+ 120    if (m_shell .gt. 0._RKIND) then
           m_couple = m_shell+m_eject
         endif
       endif
@@ -1409,12 +1432,7 @@ c
             enddo
          enddo
       enddo
-      if (m_shell .gt. d(ic,jc,kc)) then
-        write(6,*) "shell mass > cell mass!"
-        write(6,*) "shell_mass = ", m_shell * m_units
-        write(6,*) "cell_mass = ", d(ic,jc,kc) * m_units
-        ERROR_MESSAGE
-      endif
+
     !   Take shell mass out of the centralcells of the particle cloud.
     !    can't simply remove from host cell because that generates
     !    imbalances in momenta
@@ -1422,6 +1440,12 @@ c
         do k = 0_IKIND, 1_IKIND
           do j = 0_IKIND, 1_IKIND
             do i = 0_IKIND, 1_IKIND
+              if (m_shell/8._RKIND .gt. d(ic+i,jc+j,kc+k)) then
+                write(6,*) "shell mass > cell mass!"
+                write(6,*) "shell_mass = ", m_shell * m_units
+                write(6,*) "cell_mass = ", d(ic+i,jc+j,kc+k) * m_units
+                ERROR_MESSAGE
+              endif
               d(ic+i,jc+j,kc+k) = d(ic+i,jc+j,kc+k) - m_shell/8._RKIND
             enddo
           enddo
